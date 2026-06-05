@@ -23,6 +23,10 @@ function printValue(val) {
   return val && String(val).trim() ? val : "\u00A0";
 }
 
+function hasValue(val) {
+  return Boolean(val && String(val).trim());
+}
+
 function genInvNo() {
   const now = new Date();
   const yr  = now.getFullYear();
@@ -107,9 +111,14 @@ function SignaturePad() {
 }
 
 /* ── CoRow: label kiri + titik dua sejajar + input ── */
-function CoRow({ label, val, set, ph, isStatic, lw = 82, options, printClassName = "pv-line", inputTextAlign = "left", printFlex = 1 }) {
+function CoRow({
+  label, val, set, ph, isStatic, lw = 82, options,
+  printClassName = "pv-line", inputTextAlign = "left", printFlex = 1, disabled = false,
+  printText,
+}) {
   return (
-    <div style={{ display:"flex", alignItems:"flex-start", marginBottom:7, fontSize:12.5 }}>
+    <div style={{ display:"flex", alignItems:"flex-start", marginBottom:7, fontSize:12.5,
+      opacity: disabled ? 0.55 : 1 }}>
       <span style={{ width:lw, flexShrink:0, color:"#444", fontWeight:600,
         textAlign:"left", display:"inline-block", paddingTop:2 }}>{label}</span>
       <span style={{ marginRight:10, color:"#444", fontWeight:600,
@@ -125,6 +134,7 @@ function CoRow({ label, val, set, ph, isStatic, lw = 82, options, printClassName
                     fontSize:12.5, color:"#555", padding:"2px 0", transition:"border-color .15s",
                     textAlign:inputTextAlign,
                     appearance:"none", WebkitAppearance:"none", borderRadius:0 }}
+                  disabled={disabled}
                   value={val}
                   onChange={e => set(e.target.value)}
                   onFocus={e => e.target.style.borderBottomColor = RED}
@@ -138,6 +148,7 @@ function CoRow({ label, val, set, ph, isStatic, lw = 82, options, printClassName
                     fontFamily:"'DM Sans',system-ui,sans-serif",
                     fontSize:12.5, color:"#555", padding:"2px 0", transition:"border-color .15s",
                     textAlign:inputTextAlign }}
+                  disabled={disabled}
                   value={val} placeholder={ph}
                   onChange={e => set(e.target.value)}
                   onFocus={e => e.target.style.borderBottomColor = RED}
@@ -145,7 +156,7 @@ function CoRow({ label, val, set, ph, isStatic, lw = 82, options, printClassName
             }
             <span className={`pv ${printClassName}`} style={{ flex:printFlex, fontSize:12.5, color:"#555",
               wordBreak:"break-word", overflowWrap:"break-word", paddingTop:2 }}>
-              {printValue(val)}
+              {printText ?? printValue(val)}
             </span>
           </>
       }
@@ -279,6 +290,16 @@ export default function CotchInvoice() {
   const [accNo,    setAccNo]    = useState("");
   const [accName,  setAccName]  = useState("");
   const [notes,    setNotes]    = useState("");
+  const [printWarning, setPrintWarning] = useState("");
+
+  const transferEnabled = !payMethod || payMethod === "Transfer Bank";
+  const transferInfoRequired = payMethod === "Transfer Bank";
+  const missingTransferFields = [
+    !hasValue(bank) && "Bank",
+    !hasValue(accNo) && "No. Rekening",
+    !hasValue(accName) && "Atas Nama",
+  ].filter(Boolean);
+  const transferInfoComplete = missingTransferFields.length === 0;
 
   /* ── Calculations ── */
   const subtotal = items.reduce((s, i) =>
@@ -293,6 +314,23 @@ export default function CotchInvoice() {
   const addItem    = () => setItems(p => [...p, { id: uid++, desc:"", qty:1, price:0 }]);
   const removeItem = id => items.length > 1 && setItems(p => p.filter(i => i.id !== id));
   const upd        = (id, f, v) => setItems(p => p.map(i => i.id === id ? { ...i, [f]: v } : i));
+
+  useEffect(() => {
+    if (!transferInfoRequired || transferInfoComplete) {
+      setPrintWarning("");
+    }
+  }, [transferInfoRequired, transferInfoComplete]);
+
+  const handlePrint = () => {
+    if (transferInfoRequired && !transferInfoComplete) {
+      const msg = `Lengkapi informasi transfer terlebih dahulu: ${missingTransferFields.join(", ")}.`;
+      setPrintWarning(msg);
+      window.alert(msg);
+      return;
+    }
+    setPrintWarning("");
+    window.print();
+  };
 
   /* ── Shared styles ── */
   const F = {
@@ -337,6 +375,9 @@ export default function CotchInvoice() {
         .btn-print:hover{ background:#8b1215; }
         .row-e{ background:#fff; } .row-o{ background:#fafafa; }
         .row-e:hover,.row-o:hover{ background:#fff5f5; }
+        select:disabled, input:disabled{
+          cursor:not-allowed;
+        }
         input[type="date"]{ color-scheme:light; }
         input[type="date"]::-webkit-calendar-picker-indicator{ opacity:.5;cursor:pointer; }
         /* Print-value elements: hidden on screen */
@@ -381,6 +422,14 @@ export default function CotchInvoice() {
             padding-bottom:2px;
             border-bottom:1px solid #bfb7b1;
           }
+          .pv-line-short{
+            display:inline-block !important;
+            min-width:70%;
+            max-width:70%;
+            min-height:18px;
+            padding-bottom:2px;
+            border-bottom:1px solid #bfb7b1;
+          }
           .pv-line-static{
             display:inline-block !important;
             min-width:110px;
@@ -406,7 +455,8 @@ export default function CotchInvoice() {
           .desc-cell input{ display:none !important; }
           .notes-empty{
             display:grid !important;
-            gap:10px;
+            margin-top:10px;
+            row-gap:12px;
           }
           .notes-empty span{
             display:block;
@@ -425,7 +475,7 @@ export default function CotchInvoice() {
 
         {/* Toolbar — di luar scaler, tidak ikut di-scale */}
         <div className="no-print" style={{ display:"flex", justifyContent:"flex-end", marginBottom:12 }}>
-          <button className="btn-print" onClick={() => window.print()}>
+          <button className="btn-print" onClick={handlePrint}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="2.2">
               <polyline points="6 9 6 2 18 2 18 9"/>
@@ -436,6 +486,20 @@ export default function CotchInvoice() {
             Cetak / Simpan PDF
           </button>
         </div>
+        {printWarning && (
+          <div className="no-print" style={{
+            marginBottom:12,
+            padding:"10px 12px",
+            borderRadius:8,
+            background:"#fff1f1",
+            border:"1px solid #f1cccc",
+            color:"#9a3030",
+            fontSize:12,
+            lineHeight:1.5,
+          }}>
+            {printWarning}
+          </div>
+        )}
 
         {/* Scaler container — height diset JS agar pas dengan card yang di-scale */}
         <div ref={scalerRef} className="scaler">
@@ -529,12 +593,16 @@ export default function CotchInvoice() {
               <div style={{ padding:"20px 0 20px 28px" }}>
                 <div style={SL}>Detail Pembayaran</div>
                 <CoRow label="Status"    val={status}    set={setStatus}    ph="Pilih status"        lw={82}
-                  options={["Belum Dibayar", "Sebagian", "Lunas"]} />
+                  options={["Belum Dibayar", "Sebagian", "Lunas"]} printClassName="pv-line-short"
+                  printFlex={1} />
                 <CoRow label="Metode"    val={payMethod} set={setPayMethod} ph="Pilih metode"        lw={82}
-                  options={["Transfer Bank", "Tunai", "QRIS", "Kartu Kredit", "Virtual Account"]} />
-                <CoRow label="PIC"       val={pic}       set={setPic}       ph="Admin Finance Cotch" lw={82} />
+                  options={["Transfer Bank", "Tunai", "QRIS", "Kartu Kredit", "Virtual Account"]}
+                  printClassName="pv-line-short" printFlex={1} />
+                <CoRow label="PIC"       val={pic}       set={setPic}       ph="Admin Finance Cotch" lw={82}
+                  printClassName="pv-line-short" printFlex={1} />
                 <CoRow label="Mata Uang" val={currency}  set={setCurrency}  ph="Pilih mata uang"     lw={82}
-                  options={["IDR", "USD", "SGD", "EUR"]} />
+                  options={["IDR", "USD", "SGD", "EUR"]} printClassName="pv-line-short"
+                  printFlex={1} />
               </div>
             </div>
 
@@ -706,14 +774,51 @@ export default function CotchInvoice() {
             {/* ── INFORMASI TRANSFER + TANDA TANGAN ── */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr",
               gap:28, padding:"0 36px 32px" }}>
-              <div>
+              <div style={{
+                opacity: transferEnabled ? 1 : 0.72,
+                transition:"opacity .18s ease",
+              }}>
                 <div style={SL}>Informasi Transfer</div>
+                {!transferEnabled && (
+                  <div style={{
+                    marginBottom:12,
+                    padding:"9px 11px",
+                    borderRadius:6,
+                    background:"#f8f3ef",
+                    border:"1px solid #eadfd7",
+                    color:"#8b6f61",
+                    fontSize:11.5,
+                    lineHeight:1.5,
+                  }}>
+                    Informasi transfer dinonaktifkan karena metode pembayaran yang dipilih bukan transfer bank.
+                  </div>
+                )}
+                {transferInfoRequired && !transferInfoComplete && (
+                  <div className="no-print" style={{
+                    marginBottom:12,
+                    padding:"9px 11px",
+                    borderRadius:6,
+                    background:"#fff4e8",
+                    border:"1px solid #f0d6b2",
+                    color:"#9a6230",
+                    fontSize:11.5,
+                    lineHeight:1.5,
+                  }}>
+                    Untuk metode transfer bank, lengkapi: {missingTransferFields.join(", ")}.
+                  </div>
+                )}
                 <CoRow label="Bank"         val={bank}    set={setBank}
-                  ph="Nama Bank"         lw={108} printClassName="pv-line-mid" printFlex="0 1 55%" />
+                  ph="Nama Bank"         lw={108} printClassName="pv-line-mid" printFlex="0 1 55%"
+                  printText={transferEnabled ? (hasValue(bank) ? bank : "Belum diisi") : "\u00A0"}
+                  disabled={!transferEnabled} />
                 <CoRow label="No. Rekening" val={accNo}   set={setAccNo}
-                  ph="Nomor Rekening"    lw={108} printClassName="pv-line-mid" printFlex="0 1 55%" />
+                  ph="Nomor Rekening"    lw={108} printClassName="pv-line-mid" printFlex="0 1 55%"
+                  printText={transferEnabled ? (hasValue(accNo) ? accNo : "Belum diisi") : "\u00A0"}
+                  disabled={!transferEnabled} />
                 <CoRow label="Atas Nama"    val={accName} set={setAccName}
-                  ph="Nama Pemegang Rek" lw={108} printClassName="pv-line-mid" printFlex="0 1 55%" />
+                  ph="Nama Pemegang Rek" lw={108} printClassName="pv-line-mid" printFlex="0 1 55%"
+                  printText={transferEnabled ? (hasValue(accName) ? accName : "Belum diisi") : "\u00A0"}
+                  disabled={!transferEnabled} />
               </div>
               <div style={{ display:"flex", flexDirection:"column",
                 justifyContent:"flex-end", alignItems:"flex-end" }}>
