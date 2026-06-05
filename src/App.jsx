@@ -19,6 +19,10 @@ function formatTgl(s) {
   return `${parseInt(d)} ${bln[parseInt(m) - 1]} ${y}`;
 }
 
+function printValue(val) {
+  return val && String(val).trim() ? val : "\u00A0";
+}
+
 function genInvNo() {
   const now = new Date();
   const yr  = now.getFullYear();
@@ -103,7 +107,7 @@ function SignaturePad() {
 }
 
 /* ── CoRow: label kiri + titik dua sejajar + input ── */
-function CoRow({ label, val, set, ph, isStatic, lw = 82 }) {
+function CoRow({ label, val, set, ph, isStatic, lw = 82, options, printClassName = "pv-line", inputTextAlign = "left", printFlex = 1 }) {
   return (
     <div style={{ display:"flex", alignItems:"flex-start", marginBottom:7, fontSize:12.5 }}>
       <span style={{ width:lw, flexShrink:0, color:"#444", fontWeight:600,
@@ -111,20 +115,37 @@ function CoRow({ label, val, set, ph, isStatic, lw = 82 }) {
       <span style={{ marginRight:10, color:"#444", fontWeight:600,
         paddingTop:2, flexShrink:0 }}>:</span>
       {isStatic
-        ? <span style={{ color:"#888", paddingTop:2 }}>{val}</span>
+        ? <span className="pv-line-static" style={{ color:"#888", paddingTop:2 }}>{val}</span>
         : <>
-            <input className="no-print"
-              style={{ flex:1, minWidth:0, background:"transparent", border:"none",
-                borderBottom:"1.5px dashed #ddd", outline:"none",
-                fontFamily:"'DM Sans',system-ui,sans-serif",
-                fontSize:12.5, color:"#555", padding:"2px 0", transition:"border-color .15s" }}
-              value={val} placeholder={ph}
-              onChange={e => set(e.target.value)}
-              onFocus={e => e.target.style.borderBottomColor = RED}
-              onBlur={e  => e.target.style.borderBottomColor = "#ddd"} />
-            <span className="pv" style={{ flex:1, fontSize:12.5, color:"#555",
+            {options
+              ? <select className="no-print"
+                  style={{ flex:1, minWidth:0, background:"transparent", border:"none",
+                    borderBottom:"1.5px dashed #ddd", outline:"none",
+                    fontFamily:"'DM Sans',system-ui,sans-serif",
+                    fontSize:12.5, color:"#555", padding:"2px 0", transition:"border-color .15s",
+                    textAlign:inputTextAlign,
+                    appearance:"none", WebkitAppearance:"none", borderRadius:0 }}
+                  value={val}
+                  onChange={e => set(e.target.value)}
+                  onFocus={e => e.target.style.borderBottomColor = RED}
+                  onBlur={e  => e.target.style.borderBottomColor = "#ddd"}>
+                  <option value="">{ph}</option>
+                  {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              : <input className="no-print"
+                  style={{ flex:1, minWidth:0, background:"transparent", border:"none",
+                    borderBottom:"1.5px dashed #ddd", outline:"none",
+                    fontFamily:"'DM Sans',system-ui,sans-serif",
+                    fontSize:12.5, color:"#555", padding:"2px 0", transition:"border-color .15s",
+                    textAlign:inputTextAlign }}
+                  value={val} placeholder={ph}
+                  onChange={e => set(e.target.value)}
+                  onFocus={e => e.target.style.borderBottomColor = RED}
+                  onBlur={e  => e.target.style.borderBottomColor = "#ddd"} />
+            }
+            <span className={`pv ${printClassName}`} style={{ flex:printFlex, fontSize:12.5, color:"#555",
               wordBreak:"break-word", overflowWrap:"break-word", paddingTop:2 }}>
-              {val}
+              {printValue(val)}
             </span>
           </>
       }
@@ -149,9 +170,9 @@ function ClRow({ label, val, set, ph }) {
           onChange={e => set(e.target.value)}
           onFocus={e => e.target.style.borderBottomColor = RED}
           onBlur={e  => e.target.style.borderBottomColor = "#ddd"} />
-        <div className="pv-block" style={{ fontSize:12.5, color:"#666",
+        <div className="pv-block pv-block-line" style={{ fontSize:12.5, color:"#666",
           wordBreak:"break-word", overflowWrap:"break-word", whiteSpace:"pre-wrap" }}>
-          {val}
+          {printValue(val)}
         </div>
       </div>
     </div>
@@ -195,6 +216,16 @@ export default function CotchInvoice() {
       const card   = cardRef.current;
       const scaler = scalerRef.current;
       if (!card || !scaler) return;
+
+      // Mobile browsers often resize the visual viewport as the URL bar shows/hides.
+      // Avoid transform-based scaling there to prevent resize/observer feedback loops.
+      if (window.matchMedia("(max-width: 680px)").matches) {
+        card.style.width           = "";
+        card.style.transform       = "";
+        card.style.transformOrigin = "";
+        scaler.style.height        = "";
+        return;
+      }
 
       const avail = scaler.clientWidth;
       if (avail < NATURAL_W) {
@@ -241,7 +272,9 @@ export default function CotchInvoice() {
   const [items, setItems] = useState([{ id: uid++, desc:"", qty:1, price:0 }]);
 
   const [discount, setDiscount] = useState(0);
+  const [discountType, setDiscountType] = useState("nominal");
   const [usePPN,   setUsePPN]   = useState(true);
+  const [currency, setCurrency] = useState("IDR");
   const [bank,     setBank]     = useState("");
   const [accNo,    setAccNo]    = useState("");
   const [accName,  setAccName]  = useState("");
@@ -251,7 +284,10 @@ export default function CotchInvoice() {
   const subtotal = items.reduce((s, i) =>
     s + Math.round(Number(i.qty || 0) * Number(i.price || 0)), 0);
   const ppnAmt  = usePPN ? Math.round(subtotal * 0.11) : 0;
-  const discAmt = Math.round(Number(discount) || 0);
+  const rawDiscount = Number(discount) || 0;
+  const discAmt = discountType === "percent"
+    ? Math.round(subtotal * Math.min(Math.max(rawDiscount, 0), 100) / 100)
+    : Math.round(rawDiscount);
   const total   = subtotal + ppnAmt - discAmt;
 
   const addItem    = () => setItems(p => [...p, { id: uid++, desc:"", qty:1, price:0 }]);
@@ -267,7 +303,7 @@ export default function CotchInvoice() {
     width:"100%", padding:"2px 0", transition:"border-color .15s",
   };
   const TH  = { background:RED, color:"#fff", fontWeight:600,
-                fontSize:11.5, padding:"11px 10px", letterSpacing:0.4 };
+                fontSize:11, padding:"8px 10px", letterSpacing:0.35 };
   const SL  = { fontWeight:700, fontSize:10, color:RED,
                 textTransform:"uppercase", letterSpacing:1.2, marginBottom:10 };
   const TDL = { padding:"9px 10px", fontWeight:600, color:"#444",
@@ -307,6 +343,7 @@ export default function CotchInvoice() {
         .pv       { display:none; }
         .pv-block { display:none; }
         .desc-print{ display:none; }
+        .notes-empty{ display:none; }
 
         /* ── Print ── */
         @media print {
@@ -329,16 +366,53 @@ export default function CotchInvoice() {
             word-break:break-word; overflow-wrap:break-word;
             text-align:left !important;
           }
+        .pv-line{
+            display:inline-block !important;
+            min-width:100%;
+            min-height:18px;
+            padding-bottom:2px;
+            border-bottom:1px solid #bfb7b1;
+          }
+          .pv-line-mid{
+            display:inline-block !important;
+            min-width:55%;
+            max-width:100%;
+            min-height:18px;
+            padding-bottom:2px;
+            border-bottom:1px solid #bfb7b1;
+          }
+          .pv-line-static{
+            display:inline-block !important;
+            min-width:110px;
+            min-height:18px;
+            padding-bottom:2px;
+            border-bottom:1px solid #bfb7b1;
+          }
           .pv-block{
             display:block !important;
             word-break:break-word; overflow-wrap:break-word;
             white-space:pre-wrap; text-align:left !important;
           }
+          .pv-block-line{
+            min-height:18px;
+            padding-bottom:3px;
+            border-bottom:1px solid #bfb7b1;
+          }
           .desc-print{ display:block !important;
-            word-break:break-word; overflow-wrap:break-word; }
+            word-break:break-word; overflow-wrap:break-word;
+            min-height:18px; text-align:left !important; }
           .desc-cell{ word-wrap:break-word; overflow-wrap:break-word;
             white-space:normal !important; }
           .desc-cell input{ display:none !important; }
+          .notes-empty{
+            display:grid !important;
+            gap:10px;
+          }
+          .notes-empty span{
+            display:block;
+            min-height:18px;
+            border-bottom:1px solid #bfb7b1;
+          }
         }
 
         /* ── Minimal responsive: hanya kurangi padding, BUKAN ubah layout ── */
@@ -406,7 +480,9 @@ export default function CotchInvoice() {
                     style={{ ...F, width:165, fontSize:12, color:RED, fontWeight:600, textAlign:"right" }}
                     onFocus={e => e.target.style.borderBottomColor=RED}
                     onBlur={e  => e.target.style.borderBottomColor="#ddd"} />
-                  <span className="pv" style={{ fontSize:12, color:RED, fontWeight:600 }}>{invNo}</span>
+                  <span className="pv pv-line" style={{ fontSize:12, color:RED, fontWeight:600 }}>
+                    {printValue(invNo)}
+                  </span>
                 </div>
                 {[["Tanggal", issueDate, setIssueDate],
                   ["Jatuh Tempo", dueDate, setDueDate]].map(([lbl, val, set]) => (
@@ -418,8 +494,8 @@ export default function CotchInvoice() {
                       style={{ ...F, width:148, fontSize:11.5, color:"#777", textAlign:"right" }}
                       onFocus={e => e.target.style.borderBottomColor=RED}
                       onBlur={e  => e.target.style.borderBottomColor="#ddd"} />
-                    <span className="pv" style={{ fontSize:11.5, color:"#777" }}>
-                      {formatTgl(val) || "—"}
+                    <span className="pv pv-line" style={{ fontSize:11.5, color:"#777" }}>
+                      {formatTgl(val) || "\u00A0"}
                     </span>
                   </div>
                 ))}
@@ -440,8 +516,8 @@ export default function CotchInvoice() {
                   style={{ ...F, fontWeight:700, fontSize:15, color:"#111", marginBottom:6 }}
                   onFocus={e => e.target.style.borderBottomColor=RED}
                   onBlur={e  => e.target.style.borderBottomColor="#ddd"} />
-                <div className="pv-block" style={{ fontWeight:700, fontSize:15, color:"#111",
-                  marginBottom:6, wordBreak:"break-word" }}>{clientName}</div>
+                <div className="pv-block pv-block-line" style={{ fontWeight:700, fontSize:15, color:"#111",
+                  marginBottom:6, wordBreak:"break-word" }}>{printValue(clientName)}</div>
                 <ClRow label="Alamat"  val={clientAddr}  set={setClientAddr}
                   ph="Alamat klien / perusahaan" />
                 <ClRow label="Email"   val={clientEmail} set={setClientEmail}
@@ -452,10 +528,13 @@ export default function CotchInvoice() {
 
               <div style={{ padding:"20px 0 20px 28px" }}>
                 <div style={SL}>Detail Pembayaran</div>
-                <CoRow label="Status"    val={status}    set={setStatus}    ph="Belum Dibayar"       lw={82} />
-                <CoRow label="Metode"    val={payMethod} set={setPayMethod} ph="Transfer Bank"       lw={82} />
+                <CoRow label="Status"    val={status}    set={setStatus}    ph="Pilih status"        lw={82}
+                  options={["Belum Dibayar", "Sebagian", "Lunas"]} />
+                <CoRow label="Metode"    val={payMethod} set={setPayMethod} ph="Pilih metode"        lw={82}
+                  options={["Transfer Bank", "Tunai", "QRIS", "Kartu Kredit", "Virtual Account"]} />
                 <CoRow label="PIC"       val={pic}       set={setPic}       ph="Admin Finance Cotch" lw={82} />
-                <CoRow label="Mata Uang" val="IDR"       isStatic           lw={82} />
+                <CoRow label="Mata Uang" val={currency}  set={setCurrency}  ph="Pilih mata uang"     lw={82}
+                  options={["IDR", "USD", "SGD", "EUR"]} />
               </div>
             </div>
 
@@ -489,7 +568,7 @@ export default function CotchInvoice() {
                             onFocus={e => e.target.style.borderBottomColor=RED}
                             onBlur={e  => e.target.style.borderBottomColor="#ddd"} />
                           <span className="desc-print" style={{ fontSize:13, color:"#222" }}>
-                            {item.desc}
+                            {printValue(item.desc)}
                           </span>
                         </td>
                         <td style={{ padding:"11px 8px" }}>
@@ -542,10 +621,17 @@ export default function CotchInvoice() {
                     outline:"none", transition:"border-color .15s" }}
                   onFocus={e => e.target.style.borderColor=RED}
                   onBlur={e  => e.target.style.borderColor="#ddd"} />
-                <div className="pv-block" style={{ fontSize:12, color:"#777",
+                <div className="pv-block pv-block-line" style={{ fontSize:12, color:"#777",
                   lineHeight:1.75, wordBreak:"break-word", whiteSpace:"pre-wrap" }}>
-                  {notes}
+                  {notes ? notes : "\u00A0"}
                 </div>
+                {!notes && (
+                  <div className="notes-empty">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -581,19 +667,31 @@ export default function CotchInvoice() {
                     <tr style={{ borderBottom:"1.5px solid #eee" }}>
                       <td style={TDL}>Diskon</td>
                       <td style={{ padding:"9px 10px", textAlign:"right", verticalAlign:"middle" }}>
-                        <input type="number" min="0" className="no-print" value={discount}
-                          onChange={e => setDiscount(e.target.value)}
-                          style={{ ...F, width:120, fontSize:13, color:"#444",
-                            textAlign:"right", MozAppearance:"textfield" }}
-                          onFocus={e => e.target.style.borderBottomColor=RED}
-                          onBlur={e  => e.target.style.borderBottomColor="#ddd"} />
-                        <span className="pv" style={{ color:"#444" }}>{rp(discAmt)}</span>
+                        <div className="no-print" style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", gap:8 }}>
+                          <select value={discountType}
+                            onChange={e => setDiscountType(e.target.value)}
+                            style={{ ...F, width:78, fontSize:12.5, color:"#444", textAlign:"left",
+                              appearance:"none", WebkitAppearance:"none", borderRadius:0 }}
+                            onFocus={e => e.target.style.borderBottomColor=RED}
+                            onBlur={e  => e.target.style.borderBottomColor="#ddd"}>
+                            <option value="nominal">Nominal</option>
+                            <option value="percent">Persen</option>
+                          </select>
+                          <input type="number" min="0" max={discountType === "percent" ? "100" : undefined}
+                            className="no-print" value={discount}
+                            onChange={e => setDiscount(e.target.value)}
+                            style={{ ...F, width:90, fontSize:13, color:"#444",
+                              textAlign:"right", MozAppearance:"textfield" }}
+                            onFocus={e => e.target.style.borderBottomColor=RED}
+                            onBlur={e  => e.target.style.borderBottomColor="#ddd"} />
+                        </div>
+                        <span className="pv pv-line" style={{ color:"#444" }}>{rp(discAmt)}</span>
                       </td>
                     </tr>
                     <tr>
                       <td colSpan={2} style={{ padding:0 }}>
                         <div style={{ background:RED, borderRadius:5, display:"flex",
-                          justifyContent:"space-between", padding:"13px 10px", marginTop:4 }}>
+                          justifyContent:"space-between", padding:"10px 10px", marginTop:4 }}>
                           <span style={{ fontWeight:700, color:"#fff", fontSize:14 }}>TOTAL</span>
                           <span style={{ fontWeight:700, color:"#fff",
                             fontSize:14, whiteSpace:"nowrap" }}>{rp(total)}</span>
@@ -611,11 +709,11 @@ export default function CotchInvoice() {
               <div>
                 <div style={SL}>Informasi Transfer</div>
                 <CoRow label="Bank"         val={bank}    set={setBank}
-                  ph="Nama Bank"         lw={108} />
+                  ph="Nama Bank"         lw={108} printClassName="pv-line-mid" printFlex="0 1 55%" />
                 <CoRow label="No. Rekening" val={accNo}   set={setAccNo}
-                  ph="Nomor Rekening"    lw={108} />
+                  ph="Nomor Rekening"    lw={108} printClassName="pv-line-mid" printFlex="0 1 55%" />
                 <CoRow label="Atas Nama"    val={accName} set={setAccName}
-                  ph="Nama Pemegang Rek" lw={108} />
+                  ph="Nama Pemegang Rek" lw={108} printClassName="pv-line-mid" printFlex="0 1 55%" />
               </div>
               <div style={{ display:"flex", flexDirection:"column",
                 justifyContent:"flex-end", alignItems:"flex-end" }}>
