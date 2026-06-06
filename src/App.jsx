@@ -416,16 +416,14 @@ export default function CotchInvoice() {
           }
           .pv-line-mid{
             display:inline-block !important;
-            min-width:55%;
-            max-width:100%;
+            min-width:0;
             min-height:18px;
             padding-bottom:2px;
             border-bottom:1px solid #bfb7b1;
           }
           .pv-line-short{
             display:inline-block !important;
-            min-width:70%;
-            max-width:70%;
+            min-width:0;
             min-height:18px;
             padding-bottom:2px;
             border-bottom:1px solid #bfb7b1;
@@ -518,7 +516,7 @@ export default function CotchInvoice() {
 
               <div style={{ minWidth:0 }}>
                 <img src="./logo-cotch.png" alt="Cotch"
-                  style={{ height:64, display:"block", marginBottom:10 }}
+                  style={{ height:88, display:"block", marginBottom:10 }}
                   onError={e => { e.target.style.display="none";
                     e.target.nextSibling.style.display="block"; }} />
                 <div style={{ display:"none", fontFamily:"'Playfair Display',Georgia,serif",
