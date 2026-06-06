@@ -107,7 +107,9 @@ function SignaturePad() {
     const p = getPos(e, ref.current);
     const ctx = ref.current.getContext("2d");
     ctx.beginPath(); ctx.moveTo(p.x, p.y);
-    drawing.current = true; setHas(true);
+    drawing.current = true;
+    // setHas dipindah ke move agar tidak ada re-render saat mousedown
+    // yang bisa menggeser posisi canvas dan memunculkan garis palsu
   };
 
   const move = e => {
@@ -118,11 +120,12 @@ function SignaturePad() {
     if (!drawing.current) {
       if (e.type === "mousemove" && e.buttons === 1) {
         ctx.beginPath(); ctx.moveTo(p.x, p.y);
-        drawing.current = true; setHas(true);
+        drawing.current = true;
       }
       return;
     }
     ctx.lineTo(p.x, p.y); ctx.stroke();
+    setHas(true); // re-render hanya saat garis benar-benar digambar
   };
 
   const stop  = () => { drawing.current = false; };
@@ -691,7 +694,7 @@ export default function CotchInvoice() {
                   })}
                 </tbody>
               </table>
-              <div className="no-print" style={{ padding:"12px 0 6px" }}>
+              <div className="no-print" style={{ padding:"12px 0 6px", textAlign:"center" }}>
                 <button className="btn-add" onClick={addItem}>+ Tambah Item</button>
               </div>
             </div>
@@ -700,7 +703,19 @@ export default function CotchInvoice() {
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr",
               gap:28, padding:"20px 36px 26px" }}>
 
-              <div>
+              <div style={{ position:"relative" }}>
+                {status && (
+                  <div style={{
+                    position:"absolute", top:"50%", left:"50%",
+                    transform:"translate(-50%, -50%) rotate(-20deg)",
+                    pointerEvents:"none", zIndex:10,
+                    opacity:0.22, mixBlendMode:"multiply",
+                    userSelect:"none",
+                  }}>
+                    <img src={`./stamp-${status.toLowerCase()}.png`}
+                      alt={status} style={{ width:280, display:"block" }} />
+                  </div>
+                )}
                 <div style={SL}>Keterangan</div>
                 <textarea className="no-print" value={notes}
                   onChange={e => setNotes(e.target.value)}
