@@ -519,7 +519,7 @@ export default function CotchInvoice() {
         <div ref={scalerRef} className="scaler">
           <div ref={cardRef} className="card"
             style={{ background:"#fff", borderRadius:10, overflow:"hidden",
-              boxShadow:"0 4px 24px rgba(0,0,0,0.09)", border:"1px solid #e4deda" }}>
+              boxShadow:"0 4px 24px rgba(0,0,0,0.09)" }}>
 
             <div style={{ background:RED,  height:7 }} />
             <div style={{ background:GOLD, height:3 }} />
